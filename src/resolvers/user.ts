@@ -54,7 +54,7 @@ export class UserResolver {
 		@Arg("data") { username, password }: UsernamePasswordInput,
 		@Ctx() { em }: MyContext
 	): Promise<UserResponse> {
-		const alreadyExists = em.findOne(User, { username });
+		const alreadyExists = await em.findOne(User, { username });
 		if (alreadyExists) {
 			return {
 				errors: [
