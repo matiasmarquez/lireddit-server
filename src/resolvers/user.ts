@@ -3,24 +3,16 @@ import {
 	Ctx,
 	Arg,
 	Mutation,
-	InputType,
 	Field,
 	ObjectType,
 	Query,
 } from "type-graphql";
-import { MyContext } from "src/types";
+import { MyContext } from "../types";
 import { User } from "../entities/User";
 import argon2 from "argon2";
 import { COOKIE_NAME } from "../constants";
-
-@InputType()
-class UsernamePasswordInput {
-	@Field()
-	username: string;
-
-	@Field()
-	password: string;
-}
+import { UsernamePasswordInput } from "./UsernamePasswordInput";
+import { validateRegister } from "../utils/validateRegister";
 
 @ObjectType()
 class FieldError {
@@ -52,38 +44,50 @@ export class UserResolver {
 
 	@Mutation(() => UserResponse)
 	async register(
-		@Arg("data") { username, password }: UsernamePasswordInput,
-		@Ctx() { em }: MyContext
+		@Arg("data") { username, email, password }: UsernamePasswordInput,
+		@Ctx() { em, req }: MyContext
 	): Promise<UserResponse> {
 		const alreadyExists = await em.findOne(User, { username });
-		if (alreadyExists) {
-			return {
-				errors: [
-					{
-						field: "username",
-						message: "username already taken",
-					},
-				],
-			};
+		const errors = validateRegister({
+			username,
+			email,
+			password,
+			user: alreadyExists,
+		});
+		if (errors) {
+			return { errors };
 		}
 		const hashedPassword = await argon2.hash(password);
-		const user = em.create(User, { username, password: hashedPassword });
+		const user = em.create(User, {
+			username,
+			email,
+			password: hashedPassword,
+		});
 		await em.persistAndFlush(user);
+
+		req.session.userId = user.id;
+
 		return { user };
 	}
 
 	@Mutation(() => UserResponse)
 	async login(
-		@Arg("data") { username, password }: UsernamePasswordInput,
+		@Arg("usernameOrEmail") usernameOrEmail: string,
+		@Arg("password") password: string,
 		@Ctx() { em, req }: MyContext
 	): Promise<UserResponse> {
-		const user = await em.findOne(User, { username });
+		const user = await em.findOne(
+			User,
+			usernameOrEmail.includes("@")
+				? { email: usernameOrEmail }
+				: { username: usernameOrEmail }
+		);
 		if (!user) {
 			return {
 				errors: [
 					{
-						field: "username",
-						message: "that username doesn't exist",
+						field: "usernameOrEmail",
+						message: "that account doesn't exist",
 					},
 				],
 			};
