@@ -1,7 +1,7 @@
 import { UsernamePasswordInput } from "src/resolvers/UsernamePasswordInput";
 import { User } from "src/entities/User";
 
-type RegisterInput = UsernamePasswordInput & { user: User | null };
+type RegisterInput = UsernamePasswordInput & { user: User | null | undefined };
 
 export const validateRegister = ({ username, email, user }: RegisterInput) => {
 	if (user) {

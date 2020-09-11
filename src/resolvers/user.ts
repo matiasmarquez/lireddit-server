@@ -36,19 +36,20 @@ class UserResponse {
 @Resolver()
 export class UserResolver {
 	@Query(() => User, { nullable: true })
-	async me(@Ctx() { req, em }: MyContext): Promise<User | null> {
+	async me(@Ctx() { req }: MyContext): Promise<User | undefined | null> {
 		if (!req.session.userId) {
 			return null;
 		}
-		return await em.findOne(User, { id: req.session.userId });
+		const id = req.session.userId;
+		return await User.findOne(id);
 	}
 
 	@Mutation(() => UserResponse)
 	async register(
 		@Arg("data") { username, email, password }: UsernamePasswordInput,
-		@Ctx() { em, req }: MyContext
+		@Ctx() { req }: MyContext
 	): Promise<UserResponse> {
-		const alreadyExists = await em.findOne(User, { username });
+		const alreadyExists = await User.findOne({ where: { username } });
 		const errors = validateRegister({
 			username,
 			email,
@@ -59,12 +60,11 @@ export class UserResolver {
 			return { errors };
 		}
 		const hashedPassword = await argon2.hash(password);
-		const user = em.create(User, {
+		const user = await User.create({
 			username,
 			email,
 			password: hashedPassword,
-		});
-		await em.persistAndFlush(user);
+		}).save();
 
 		req.session.userId = user.id;
 
@@ -75,13 +75,12 @@ export class UserResolver {
 	async login(
 		@Arg("usernameOrEmail") usernameOrEmail: string,
 		@Arg("password") password: string,
-		@Ctx() { em, req }: MyContext
+		@Ctx() { req }: MyContext
 	): Promise<UserResponse> {
-		const user = await em.findOne(
-			User,
+		const user = await User.findOne(
 			usernameOrEmail.includes("@")
-				? { email: usernameOrEmail }
-				: { username: usernameOrEmail }
+				? { where: { email: usernameOrEmail } }
+				: { where: { username: usernameOrEmail } }
 		);
 		if (!user) {
 			return {
@@ -129,7 +128,7 @@ export class UserResolver {
 	async changePassword(
 		@Arg("token") token: string,
 		@Arg("newPassword") newPassword: string,
-		@Ctx() { redis, em, req }: MyContext
+		@Ctx() { redis, req }: MyContext
 	): Promise<UserResponse> {
 		const key = FORGET_PASSWORD_PREFIX + token;
 		const userId = await redis.get(key);
@@ -145,7 +144,8 @@ export class UserResolver {
 			};
 		}
 
-		const user = await em.findOne(User, { id: parseInt(userId) });
+		const id = parseInt(userId);
+		const user = await User.findOne(id);
 
 		if (!user) {
 			return {
@@ -158,8 +158,7 @@ export class UserResolver {
 			};
 		}
 
-		user.password = await argon2.hash(newPassword);
-		await em.persistAndFlush(user);
+		await User.update({ id }, { password: await argon2.hash(newPassword) });
 
 		await redis.del(key);
 		req.session.userId = user.id;
@@ -170,11 +169,11 @@ export class UserResolver {
 	@Mutation(() => String)
 	async forgotPassword(
 		@Arg("email") email: string,
-		@Ctx() { em, redis }: MyContext
+		@Ctx() { redis }: MyContext
 	): Promise<string> {
 		// the purpose of this method is send an email but
 		// I made it simple by sending the url in the response of the mutation.
-		const user = await em.findOne(User, { email });
+		const user = await User.findOne({ where: { email } });
 		if (!user) {
 			return "";
 		}
