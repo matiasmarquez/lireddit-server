@@ -57,14 +57,34 @@ export class PostResolver {
 		const isUpdoot = value !== -1;
 		const point = isUpdoot ? 1 : -1;
 		const { userId } = req.session;
-		await getConnection().transaction(async (em) => {
-			await em
-				.getRepository(Updoot)
-				.insert({ postId, userId, value: point });
-			await em
-				.getRepository(Post)
-				.update({ id: postId }, { points: () => `points + ${point}` });
-		});
+
+		const updoot = await Updoot.findOne({ where: { postId, userId } });
+
+		if (updoot && updoot.value !== point) {
+			await getConnection().transaction(async (em) => {
+				await em
+					.getRepository(Updoot)
+					.update({ userId, postId }, { value: point });
+				await em
+					.getRepository(Post)
+					.update(
+						{ id: postId },
+						{ points: () => `points + ${2 * point}` }
+					);
+			});
+		} else if (!updoot) {
+			await getConnection().transaction(async (em) => {
+				await em
+					.getRepository(Updoot)
+					.insert({ postId, userId, value: point });
+				await em
+					.getRepository(Post)
+					.update(
+						{ id: postId },
+						{ points: () => `points + ${point}` }
+					);
+			});
+		}
 		return true;
 	}
 
