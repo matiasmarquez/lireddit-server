@@ -58,8 +58,12 @@ export class PostResolver {
 		const point = isUpdoot ? 1 : -1;
 		const { userId } = req.session;
 		await getConnection().transaction(async (em) => {
-			await em.getRepository(Updoot).insert({ postId, userId, value: point });
-			await em.getRepository(Post).update({ id: postId }, { points: () => `points + ${point}` });
+			await em
+				.getRepository(Updoot)
+				.insert({ postId, userId, value: point });
+			await em
+				.getRepository(Post)
+				.update({ id: postId }, { points: () => `points + ${point}` });
 		});
 		return true;
 	}
@@ -78,7 +82,7 @@ export class PostResolver {
 			.orderBy("p.createdAt", "DESC")
 			.take(realLimitPlusOne);
 		if (cursor) {
-			qb.where("createdAt < :cursor", {
+			qb.where("p.createdAt < :cursor", {
 				cursor: new Date(parseInt(cursor)),
 			});
 		}
