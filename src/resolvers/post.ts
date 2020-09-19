@@ -16,6 +16,7 @@ import {
 } from "type-graphql";
 import { Post } from "../entities/Post";
 import { getConnection } from "typeorm";
+import { Updoot } from "../entities/Updoot";
 
 @InputType()
 class PostInput {
@@ -46,6 +47,23 @@ export class PostResolver {
 		return `${root.text.slice(0, 50)}${dots}`;
 	}
 
+	@Mutation(() => Boolean)
+	@UseMiddleware(isAuth)
+	async vote(
+		@Arg("postId", () => Int) postId: number,
+		@Arg("value", () => Int) value: number,
+		@Ctx() { req }: MyContext
+	): Promise<boolean> {
+		const isUpdoot = value !== -1;
+		const point = isUpdoot ? 1 : -1;
+		const { userId } = req.session;
+		await getConnection().transaction(async (em) => {
+			await em.getRepository(Updoot).insert({ postId, userId, value: point });
+			await em.getRepository(Post).update({ id: postId }, { points: () => `points + ${point}` });
+		});
+		return true;
+	}
+
 	@Query(() => PaginatedPosts)
 	async posts(
 		@Arg("limit", () => Int) limit: number,
@@ -56,6 +74,7 @@ export class PostResolver {
 		const qb = getConnection()
 			.getRepository(Post)
 			.createQueryBuilder("p")
+			.innerJoinAndSelect("p.author", "author")
 			.orderBy("p.createdAt", "DESC")
 			.take(realLimitPlusOne);
 		if (cursor) {
