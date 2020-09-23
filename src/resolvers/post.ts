@@ -17,6 +17,7 @@ import {
 import { Post } from "../entities/Post";
 import { getConnection } from "typeorm";
 import { Updoot } from "../entities/Updoot";
+import { User } from "../entities/User";
 
 @InputType()
 class PostInput {
@@ -49,21 +50,19 @@ export class PostResolver {
 
 	@FieldResolver(() => Int, { nullable: true })
 	async voteStatus(
-		@Root() root: Post,
-		@Ctx() { req }: MyContext
+		@Root() post: Post,
+		@Ctx() { req, updootLoader }: MyContext
 	): Promise<number | null> {
 		if (!req.session.userId) {
 			return null;
 		}
-		const updoot = await getConnection()
-			.getRepository(Updoot)
-			.findOne({
-				where: {
-					userId: req.session.userId,
-					postId: root.id,
-				},
-			});
+		const updoot = await updootLoader.load({postId: post.id, userId: req.session.userId})
 		return updoot ? updoot.value : null;
+	}
+
+	@FieldResolver(() => User)
+	author(@Root() post: Post, @Ctx() { userLoader }: MyContext) {
+		return userLoader.load(post.authorId);
 	}
 
 	@Mutation(() => Boolean)
@@ -134,7 +133,7 @@ export class PostResolver {
 
 	@Query(() => Post, { nullable: true })
 	post(@Arg("id", () => Int) id: number): Promise<Post | undefined> {
-		return Post.findOne(id, { relations: ["author"] });
+		return Post.findOne(id);
 	}
 
 	@Mutation(() => Post)

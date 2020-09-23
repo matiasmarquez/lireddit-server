@@ -11,6 +11,8 @@ import { HelloResolver } from "./resolvers/hello";
 import { PostResolver } from "./resolvers/post";
 import { UserResolver } from "./resolvers/user";
 import { createConnection } from "typeorm";
+import { createUserLoader } from "./loader/createUserLoader";
+import { createUpdootLoader } from "./loader/createUpdootLoader";
 
 const main = async () => {
 	const conn = await createConnection();
@@ -51,7 +53,13 @@ const main = async () => {
 			resolvers: [HelloResolver, PostResolver, UserResolver],
 			validate: false,
 		}),
-		context: ({ req, res }) => ({ req, res, redis }),
+		context: ({ req, res }) => ({
+			req,
+			res,
+			redis,
+			userLoader: createUserLoader(),
+			updootLoader: createUpdootLoader(),
+		}),
 	});
 
 	apolloServer.applyMiddleware({
